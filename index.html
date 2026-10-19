@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>App Store ASO Length Checker: title, subtitle and keyword field</title>
+<meta name="description" content="Free in-browser checker for App Store metadata: app name (30), subtitle (30), keyword field (100), promotional text (170) and description (4000). Flags duplicate and wasted keywords.">
+<style>
+:root{--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e;--muted:#57606a;--line:#d0d7de}
+*{box-sizing:border-box}body{font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;color:#1f2328;background:#f6f8fa}
+main{max-width:760px;margin:0 auto;padding:24px 16px 48px}h1{font-size:1.6rem;margin:.2em 0}p.lead{color:var(--muted);margin-top:0}
+.field{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:14px 0}
+label{font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.count{font-variant-numeric:tabular-nums;font-weight:600}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+input,textarea{width:100%;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;margin-top:6px}
+textarea{resize:vertical}.bar{height:4px;background:#eaeef2;border-radius:2px;margin-top:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}
+ul.notes{margin:8px 0 0;padding-left:20px;font-size:.92rem}ul.notes li{margin:2px 0}
+.hint{color:var(--muted);font-size:.88rem}button{font:inherit;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:#fff;cursor:pointer}
+footer{color:var(--muted);font-size:.9rem;margin-top:28px;border-top:1px solid var(--line);padding-top:14px}code{background:#eaeef2;padding:1px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+<h1>App Store ASO Length Checker</h1>
+<p class="lead">Paste your App Store Connect metadata to check every field against Apple's character limits and spot wasted keyword space. Everything runs in your browser; nothing is sent anywhere.</p>
+
+<div class="field"><label for="name">App name <span class="count" id="c-name"></span></label>
+<input id="name" data-limit="30" placeholder="e.g. Habit Tracker: Daily Goals"><div class="bar"><i id="b-name"></i></div><ul class="notes" id="n-name"></ul></div>
+
+<div class="field"><label for="subtitle">Subtitle <span class="count" id="c-subtitle"></span></label>
+<input id="subtitle" data-limit="30" placeholder="e.g. Build routines that stick"><div class="bar"><i id="b-subtitle"></i></div><ul class="notes" id="n-subtitle"></ul></div>
+
+<div class="field"><label for="keywords">Keyword field <span class="count" id="c-keywords"></span></label>
+<textarea id="keywords" data-limit="100" rows="2" placeholder="streak,routine,planner,reminder,productivity"></textarea>
+<div class="bar"><i id="b-keywords"></i></div>
+<div class="hint">Comma-separated. <button type="button" id="clean">Clean up keywords</button> removes spaces after commas, duplicates and words already in the name or subtitle.</div>
+<ul class="notes" id="n-keywords"></ul></div>
+
+<div class="field"><label for="promo">Promotional text <span class="count" id="c-promo"></span></label>
+<textarea id="promo" data-limit="170" rows="2"></textarea><div class="bar"><i id="b-promo"></i></div><ul class="notes" id="n-promo"></ul></div>
+
+<div class="field"><label for="desc">Description <span class="count" id="c-desc"></span></label>
+<textarea id="desc" data-limit="4000" rows="6"></textarea><div class="bar"><i id="b-desc"></i></div><ul class="notes" id="n-desc"></ul></div>
+
+<p class="hint">Your inputs are kept in this browser's local storage so a refresh doesn't lose them. <button type="button" id="reset">Clear all</button></p>
+
+<footer>
+<p><strong>About the limits.</strong> App name and subtitle: 30 characters each. Keywords: 100 characters. Promotional text: 170. Description: 4,000. Characters are counted as user-perceived characters (emoji and accented letters count once). Always confirm in App Store Connect, which is the final authority.</p>
+<p><strong>About the keyword tips.</strong> Common ASO practice: separate keywords with commas and no spaces, don't repeat a word, and don't spend keyword space on words already in your app name or subtitle. These are heuristics, not Apple rules.</p>
+<p>Once your metadata fits, compare it with what your competitors rank for. <a href="https://peekpanda.com">PeekPanda</a> keeps a case file of dated App Store evidence for iOS apps; its <a href="https://peekpanda.com/docs/keyword-gap">keyword gap</a> view splits searches into theirs only, both, and yours only.</p>
+<p>Open source: <a href="https://github.com/fdarkaou/aso-length-checker">github.com/fdarkaou/aso-length-checker</a> · MIT licence</p>
+</footer>
+</main>
+<script>
+const seg = typeof Intl!=="undefined" && Intl.Segmenter ? new Intl.Segmenter(undefined,{granularity:"grapheme"}) : null;
+const len = s => seg ? [...seg.segment(s)].length : [...s].length;
+const words = s => (s.toLowerCase().match(/[\p{L}\p{N}]+/gu)||[]);
+const ids = ["name","subtitle","keywords","promo","desc"];
+const el = id => document.getElementById(id);
+function kwList(s){return s.split(",").map(k=>k.trim()).filter(Boolean)}
+function render(){
+  const v = {}; ids.forEach(id=>{v[id]=el(id).value; localStorage.setItem("aso-"+id,v[id]);});
+  const titleWords = new Set([...words(v.name),...words(v.subtitle)]);
+  ids.forEach(id=>{
+    const limit = +el(id).dataset.limit, n = len(v[id]), left = limit-n;
+    const c = el("c-"+id); c.textContent = n+" / "+limit;
+    c.className = "count "+(left<0?"bad":left<=Math.max(2,limit*.1)?"ok":"warn");
+    const b = el("b-"+id); b.style.width = Math.min(100,n/limit*100)+"%"; b.style.background = left<0?"var(--bad)":"var(--ok)";
+    const notes = [];
+    if(left<0) notes.push(["bad",`${-left} character${left===-1?"":"s"} over the limit.`]);
+    else if(n && (id==="name"||id==="subtitle"||id==="keywords") && left>0) notes.push(["warn",`${left} character${left===1?"":"s"} unused.`]);
+    if(v[id]!==v[id].trim()) notes.push(["warn","Leading or trailing spaces count as characters."]);
+    if(/\s{2,}/.test(v[id])) notes.push(["warn","Double spaces found."]);
+    if(id==="subtitle"){const dup=words(v.subtitle).filter(w=>words(v.name).includes(w)); if(dup.length) notes.push(["warn","Also in app name: "+[...new Set(dup)].join(", ")]);}
+    if(id==="keywords" && v.keywords){
+      if(/,\s/.test(v.keywords)) notes.push(["warn","Spaces after commas use up characters."]);
+      const ks = kwList(v.keywords), seen = new Set(), dups = new Set(); ks.forEach(k=>{const l=k.toLowerCase(); seen.has(l)?dups.add(l):seen.add(l)});
+      if(dups.size) notes.push(["warn","Duplicate keywords: "+[...dups].join(", ")]);
+      const inTitle = [...new Set(ks.flatMap(k=>words(k)).filter(w=>titleWords.has(w)))];
+      if(inTitle.length) notes.push(["warn","Already in name/subtitle: "+inTitle.join(", ")]);
+      notes.push(["ok",ks.length+" keyword"+(ks.length===1?"":"s")]);
+    }
+    el("n-"+id).innerHTML = notes.map(([k,t])=>`<li class="${k}"></li>`).join("");
+    [...el("n-"+id).children].forEach((li,i)=>li.textContent=notes[i][1]);
+  });
+}
+el("clean").onclick=()=>{
+  const titleWords = new Set([...words(el("name").value),...words(el("subtitle").value)]), seen=new Set(), out=[];
+  kwList(el("keywords").value).forEach(k=>{const l=k.toLowerCase(); if(seen.has(l)) return; seen.add(l);
+    const ws=words(k); if(ws.length && ws.every(w=>titleWords.has(w))) return; out.push(k);});
+  el("keywords").value=out.join(","); render();
+};
+el("reset").onclick=()=>{ids.forEach(id=>{el(id).value="";localStorage.removeItem("aso-"+id)});render()};
+ids.forEach(id=>{el(id).value=localStorage.getItem("aso-"+id)||"";el(id).addEventListener("input",render)});
+render();
+</script>
+</body>
+</html>
